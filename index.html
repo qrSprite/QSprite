@@ -2,98 +2,319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QSprite</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QSprite</title>
 
-  <style>
-    body {
-      background: #eeeeee;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 24px;
-    }
+<style>
+  body {
+    background: #eeeeee;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 20px;
+  }
 
-    h1 {
-      color: #222222;
-    }
+  canvas {
+    width: min(90vw, 400px);
+    height: auto;
+    image-rendering: pixelated;
+    border: 2px solid #222;
+  }
 
-    canvas {
-      width: min(90vw, 400px);
-      height: auto;
-      background: black;
-      border: 2px solid #222222;
-      image-rendering: pixelated;
-    }
-  </style>
+  .controls {
+    display: grid;
+    grid-template-columns: 60px 60px 60px;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px auto;
+  }
+
+  button {
+    height: 55px;
+    font-size: 24px;
+    border: 1px solid #888;
+    border-radius: 10px;
+    background: #ddd;
+    touch-action: none;
+  }
+
+  .empty {
+    visibility: hidden;
+  }
+
+  #status {
+    font-size: 12px;
+    color: #555;
+  }
+</style>
 </head>
 
 <body>
-  <h1>QSprite</h1>
 
-  <canvas id="game" width="400" height="400"></canvas>
+<h1>QSprite</h1>
 
-  <script>
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
+<canvas id="game" width="400" height="400"></canvas>
 
-    // Read game data from the URL
-    const gameData = location.hash.slice(1);
+<p id="status">QSprite Player</p>
 
-    // Temporary player
-    const player = {
-      x: 200,
-      y: 200,
-      speed: 2
-    };
+<div class="controls">
+  <button class="empty"></button>
+  <button data-key="up">▲</button>
+  <button class="empty"></button>
+  <button data-key="left">◀</button>
+  <button data-key="down">▼</button>
+  <button data-key="right">▶</button>
+</div>
 
-    const keys = {};
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const statusText = document.getElementById("status");
 
-    document.addEventListener("keydown", event => {
-      keys[event.key] = true;
-    });
+// Default game data
+const defaultGame = {
+  version: 1,
 
-    document.addEventListener("keyup", event => {
-      keys[event.key] = false;
-    });
+  palette: [
+    null,
+    "#FFFFFF",
+    "#808080"
+  ],
 
-    function update() {
-      if (keys.ArrowUp) player.y -= player.speed;
-      if (keys.ArrowDown) player.y += player.speed;
-      if (keys.ArrowLeft) player.x -= player.speed;
-      if (keys.ArrowRight) player.x += player.speed;
+  sprite: {
+    width: 10,
+    height: 10,
+    pixels: [
+      "0000000000",
+      "0000200000",
+      "0002020000",
+      "0002220000",
+      "0020002000",
+      "0000000000",
+      "0000000000",
+      "0000000000",
+      "0000000000",
+      "0000000000"
+    ]
+  },
 
-      player.x = Math.max(155, Math.min(245, player.x));
-      player.y = Math.max(130, Math.min(270, player.y));
+  background: {
+    color: "#000000",
+    x: 148,
+    y: 101,
+    width: 104,
+    height: 198
+  },
+
+  bounds: {
+    left: 155,
+    right: 245,
+    top: 130,
+    bottom: 270
+  },
+
+  player: {
+    x: 200,
+    y: 200,
+    speed: 2
+  }
+};
+
+// Decode QSprite data from URL
+function decodeGame() {
+  const encoded = location.hash.slice(1);
+
+  if (!encoded) {
+    statusText.textContent = "Default test game";
+    return defaultGame;
+  }
+
+  try {
+    if (!encoded.startsWith("Q1.")) {
+      throw new Error("Unknown QSprite version");
     }
 
-    function draw() {
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, 400, 400);
+    let base64 = encoded.slice(3)
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
 
-      // QSprite game area
-      ctx.fillStyle = "#222222";
-      ctx.fillRect(148, 101, 104, 198);
+    while (base64.length % 4) {
+      base64 += "=";
+    }
 
-      // Temporary player
-      ctx.fillStyle = "#808080";
-      ctx.fillRect(player.x - 2, player.y - 2, 4, 4);
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(
+      binary, character => character.charCodeAt(0)
+    );
 
-      if (!gameData) {
-        ctx.fillStyle = "white";
-        ctx.font = "14px Arial";
-        ctx.fillText("Waiting for QSprite data...", 90, 330);
+    const json = new TextDecoder().decode(bytes);
+    const game = JSON.parse(json);
+
+    if (game.version !== 1) {
+      throw new Error("Unsupported game version");
+    }
+
+    validateGame(game);
+
+    statusText.textContent = "QSprite game loaded!";
+    return game;
+
+  } catch (error) {
+    statusText.textContent = "Invalid QSprite data: " + error.message;
+    console.error(error);
+    return defaultGame;
+  }
+}
+
+// Basic data validation
+function validateGame(game) {
+  const sprite = game.sprite;
+
+  if (!sprite ||
+      !Number.isInteger(sprite.width) ||
+      !Number.isInteger(sprite.height) ||
+      sprite.width < 1 || sprite.height < 1 ||
+      sprite.width > 32 || sprite.height > 32 ||
+      !Array.isArray(sprite.pixels) ||
+      sprite.pixels.length !== sprite.height ||
+      !Array.isArray(game.palette) ||
+      game.palette.length > 16) {
+    throw new Error("Invalid sprite or palette");
+  }
+
+  for (const row of sprite.pixels) {
+    if (typeof row !== "string" ||
+        row.length !== sprite.width ||
+        !/^[0-9]+$/.test(row)) {
+      throw new Error("Invalid pixel data");
+    }
+
+    for (const pixel of row) {
+      if (Number(pixel) >= game.palette.length) {
+        throw new Error("Invalid palette index");
       }
     }
+  }
 
-    function gameLoop() {
-      update();
-      draw();
-      requestAnimationFrame(gameLoop);
+  for (const value of [
+    game.background?.x,
+    game.background?.y,
+    game.background?.width,
+    game.background?.height,
+    game.player?.x,
+    game.player?.y,
+    game.player?.speed,
+    game.bounds?.left,
+    game.bounds?.right,
+    game.bounds?.top,
+    game.bounds?.bottom
+  ]) {
+    if (!Number.isFinite(value)) {
+      throw new Error("Invalid game settings");
     }
+  }
+}
 
-    gameLoop();
-  </script>
+const game = decodeGame();
+
+// Player settings
+const player = {
+  x: game.player.x,
+  y: game.player.y,
+  speed: game.player.speed
+};
+
+const keys = {};
+
+// Keyboard controls
+document.addEventListener("keydown", event => {
+  const key = event.key.replace("Arrow", "").toLowerCase();
+
+  if (["up", "down", "left", "right"].includes(key)) {
+    keys[key] = true;
+    event.preventDefault();
+  }
+});
+
+document.addEventListener("keyup", event => {
+  const key = event.key.replace("Arrow", "").toLowerCase();
+  keys[key] = false;
+});
+
+// Touch controls
+document.querySelectorAll("[data-key]").forEach(button => {
+  const key = button.dataset.key;
+
+  button.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    keys[key] = true;
+  });
+
+  ["pointerup", "pointerleave", "pointercancel"].forEach(type => {
+    button.addEventListener(type, () => {
+      keys[key] = false;
+    });
+  });
+});
+
+// Update game
+function update() {
+  if (keys.up) player.y -= player.speed;
+  if (keys.down) player.y += player.speed;
+  if (keys.left) player.x -= player.speed;
+  if (keys.right) player.x += player.speed;
+
+  const b = game.bounds;
+
+  player.x = Math.max(b.left, Math.min(b.right, player.x));
+  player.y = Math.max(b.top, Math.min(b.bottom, player.y));
+}
+
+// Draw game
+function draw() {
+  ctx.fillStyle = "#eeeeee";
+  ctx.fillRect(0, 0, 400, 400);
+
+  const bg = game.background;
+
+  ctx.fillStyle = bg.color;
+  ctx.fillRect(bg.x, bg.y, bg.width, bg.height);
+
+  const sprite = game.sprite;
+  const pixelSize = 4;
+
+  for (let row = 0; row < sprite.height; row++) {
+    for (let col = 0; col < sprite.width; col++) {
+
+      const index = Number(sprite.pixels[row][col]);
+      const color = game.palette[index];
+
+      if (color !== null && color !== undefined) {
+        ctx.fillStyle = color;
+
+        ctx.fillRect(
+          player.x - (sprite.width * pixelSize) / 2
+            + col * pixelSize,
+          player.y - (sprite.height * pixelSize) / 2
+            + row * pixelSize,
+          pixelSize,
+          pixelSize
+        );
+      }
+    }
+  }
+}
+
+// Game loop
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
 </body>
 </html>
