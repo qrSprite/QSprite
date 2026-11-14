@@ -1,0 +1,99 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QSprite</title>
+
+  <style>
+    body {
+      background: #eeeeee;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 24px;
+    }
+
+    h1 {
+      color: #222222;
+    }
+
+    canvas {
+      width: min(90vw, 400px);
+      height: auto;
+      background: black;
+      border: 2px solid #222222;
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>QSprite</h1>
+
+  <canvas id="game" width="400" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    // Read game data from the URL
+    const gameData = location.hash.slice(1);
+
+    // Temporary player
+    const player = {
+      x: 200,
+      y: 200,
+      speed: 2
+    };
+
+    const keys = {};
+
+    document.addEventListener("keydown", event => {
+      keys[event.key] = true;
+    });
+
+    document.addEventListener("keyup", event => {
+      keys[event.key] = false;
+    });
+
+    function update() {
+      if (keys.ArrowUp) player.y -= player.speed;
+      if (keys.ArrowDown) player.y += player.speed;
+      if (keys.ArrowLeft) player.x -= player.speed;
+      if (keys.ArrowRight) player.x += player.speed;
+
+      player.x = Math.max(155, Math.min(245, player.x));
+      player.y = Math.max(130, Math.min(270, player.y));
+    }
+
+    function draw() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, 400, 400);
+
+      // QSprite game area
+      ctx.fillStyle = "#222222";
+      ctx.fillRect(148, 101, 104, 198);
+
+      // Temporary player
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(player.x - 2, player.y - 2, 4, 4);
+
+      if (!gameData) {
+        ctx.fillStyle = "white";
+        ctx.font = "14px Arial";
+        ctx.fillText("Waiting for QSprite data...", 90, 330);
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
